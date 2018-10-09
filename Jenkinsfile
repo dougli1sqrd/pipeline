@@ -25,17 +25,17 @@ pipeline {
 	TARGET_GO_SITE_BRANCH = 'iteration'
 	// The people to call when things go bad. It is a comma-space
 	// "separated" string.
-	TARGET_ADMIN_EMAILS = 'sjcarbon@lbl.gov'
-	TARGET_SUCCESS_EMAILS = 'sjcarbon@lbl.gov,suzia@stanford.edu'
+	TARGET_ADMIN_EMAILS = ''
+	TARGET_SUCCESS_EMAILS = ''
 	// The file bucket(/folder) combination to use.
-	TARGET_BUCKET = 'go-data-product-experimental'
+	TARGET_BUCKET = 'foo'
 	// The URL prefix to use when creating site indices.
-	TARGET_INDEXER_PREFIX = 'http://experimental.geneontology.io'
+	TARGET_INDEXER_PREFIX = 'foo'
 	// This variable should typically be 'TRUE', which will cause
 	// some additional basic checks to be made. There are some
 	// very exotic cases where these check may need to be skipped
 	// for a run, in that case this variable is set to 'FALSE'.
-	WE_ARE_BEING_SAFE_P = 'TRUE'
+	WE_ARE_BEING_SAFE_P = 'FALSE'
 	// The Zenodo concept ID to use for releases (and occasionally
 	// master testing).
 	ZENODO_REFERENCE_CONCEPT = '199441'
