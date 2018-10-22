@@ -78,8 +78,8 @@ pipeline {
 		// non-mainline runs.
 		script {
 		    if( BRANCH_NAME != 'master' && TARGET_BUCKET == 'go-data-product-experimental'){
-			echo 'Only master can touch that target.'
-			sh '`exit -1`'
+			// echo 'Only master can touch that target.'
+			// sh '`exit -1`'
 		    }else if( BRANCH_NAME != 'snapshot' && TARGET_BUCKET == 'go-data-product-snapshot'){
 			echo 'Only master can touch that target.'
 			sh '`exit -1`'
