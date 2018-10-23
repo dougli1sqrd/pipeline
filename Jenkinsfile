@@ -155,33 +155,24 @@ pipeline {
 		///
 		echo 'Push out to AmiGO'
 
-		// Get a mount point ready
-		sh 'mkdir -p $WORKSPACE/mnt || true'
 		// Ninja in our file credentials from Jenkins.
 		withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), file(credentialsId: 'go-svn-private-key', variable: 'GO_SVN_IDENTITY'), file(credentialsId: 'ansible-bbop-local-slave', variable: 'DEPLOY_LOCAL_IDENTITY'), file(credentialsId: 'go-aws-ec2-ansible-slave', variable: 'DEPLOY_REMOTE_IDENTITY')]) {
 
 		    // Get our operations code and decend into ansible
 		    // working directory.
 		    dir('./operations') {
-			sh 'ls -AlF'
+
 			git([branch: 'master',
 			     credentialsId: 'bbop-agent-github-user-pass',
 			     url: 'https://github.com/geneontology/operations.git'])
 			dir('./ansible') {
-			    sh 'ls -AlF'
+
 			    //sh 'ansible-playbook ./update-golr-w-snap.yaml --inventory=hosts.amigo --private-key="$DEPLOY_REMOTE_IDENTITY" -e target_host=amigo-golr-exp -e target_user=ubuntu'
 			    sh 'ansible-playbook ./update-golr.yaml --inventory=hosts.amigo --private-key="$DEPLOY_REMOTE_IDENTITY" -e target_host=amigo-golr-exp -e target_user=ubuntu'
 			}
 		    }
 		}
 	    }
-	    // WARNING: Extra safety as I expect this to sometimes fail.
-	    post {
-                always {
-		    // Bail on the remote filesystem.
-		    sh 'fusermount -u $WORKSPACE/mnt/ || true'
-                }
-            }
 	}
     }
 }
