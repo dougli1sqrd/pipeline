@@ -163,12 +163,13 @@ pipeline {
 		    // Get our operations code and decend into ansible
 		    // working directory.
 		    dir('./operations') {
+			sh 'ls -AlF'
 			git([branch: 'master',
 			     credentialsId: 'bbop-agent-github-user-pass',
 			     url: 'https://github.com/geneontology/operations.git'])
 			dir('./ansible') {
-
-			    sh 'ansible-playbook update-golr-w-snap.yaml --inventory=hosts.amigo --private-key="$DEPLOY_REMOTE_IDENTITY" -e target_host=amigo-golr-exp -e target_user=ubuntu'
+			    sh 'ls -AlF'
+			    sh 'ansible-playbook ./update-golr-w-snap.yaml --inventory=hosts.amigo --private-key="$DEPLOY_REMOTE_IDENTITY" -e target_host=amigo-golr-exp -e target_user=ubuntu'
 			}
 		    }
 		}
