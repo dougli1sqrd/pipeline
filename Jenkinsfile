@@ -244,7 +244,7 @@ pipeline {
 		script {
 		    if( env.BRANCH_NAME == 'issue-98-user-trigger' ){
 			milestone()
-			lock(resource: 'myResource', inversePrecedence: true) {
+			lock(resource: 'release-run') {
 			    echo "A release run holds the lock."
 			    timeout(time:7, unit:'DAYS') {
 				input message:'Approve release products?'
