@@ -241,11 +241,13 @@ pipeline {
 
 		//
 		echo "S2 top: ${env.PIPELINE_PRODUCTS_READY_FOR_PUBLICATION}"
-		if( env.BRANCH_NAME == 'issue-98-user-trigger' ){
-		    lock(resource: 'myResource', inversePrecedence: true) {
-			echo "A release run holds the lock."
-			timeout(time:7, unit:'DAYS') {
-			    input message:'Approve release products?'
+		script {
+		    if( env.BRANCH_NAME == 'issue-98-user-trigger' ){
+			lock(resource: 'myResource', inversePrecedence: true) {
+			    echo "A release run holds the lock."
+			    timeout(time:7, unit:'DAYS') {
+				input message:'Approve release products?'
+			    }
 			}
 		    }
 		}
