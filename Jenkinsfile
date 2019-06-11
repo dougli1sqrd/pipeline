@@ -243,13 +243,11 @@ pipeline {
 		echo "S2 top: ${env.PIPELINE_PRODUCTS_READY_FOR_PUBLICATION}"
 		script {
 		    if( env.BRANCH_NAME == 'issue-98-user-trigger' ){
-			milestone()
 			lock(resource: 'release-run', inversePrecedence: true) {
 			    echo "A release run holds the lock."
 			    timeout(time:7, unit:'DAYS') {
 				input message:'Approve release products?'
 			    }
-			    milestone()
 			}
 		    }
 		}
