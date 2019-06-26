@@ -446,7 +446,7 @@ pipeline {
 
 			    // Installs the specialty ontobio script for materializing inferences see
 			    // https://github.com/biolink/ontobio/issues/341
-			    sh 'python3 ./mypyenv/bin/pip3 install -e git+git@github.com:biolink/ontobio.git@issue-341-enables_script#egg=ontobio'
+			    sh 'python3 ./mypyenv/bin/pip3 install -e git+https://github.com/biolink/ontobio.git@issue-341-enables_script#egg=ontobio'
 			    // sh 'python3 ./mypyenv/bin/pip3 install ../graphstore/rule-runner'
 			    // Ready, set...
 			    // sh '$MAKECMD clean'
