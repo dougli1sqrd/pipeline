@@ -478,6 +478,10 @@ pipeline {
 				    // everything handy: this is
 				    // SPARTA!
 				    //sh '$MAKECMD -e target/sparta-report.json'
+					sh 'mkdir -p target/groups/mgi'
+					sh 'mkdir -p target/groups/pombase'
+					sh 'mkdir -p target/groups/wb'
+					
 					sh 'curl -L http://snapshot.geneontology.org/annotations/mgi.gaf.gz | gzip -dcf > target/groups/mgi/mgi.gaf'
 					sh 'curl -L http://snapshot.geneontology.org/annotations/pombase.gaf.gz | gzip -dcf > target/groups/pombase/pombase.gaf'
 					sh 'curl -L http://snapshot.geneontology.org/annotations/wb.gaf.gz | gzip -dcf > target/groups/wb/wb.gaf'
