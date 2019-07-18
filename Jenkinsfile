@@ -487,6 +487,7 @@ pipeline {
 					sh 'curl -L http://snapshot.geneontology.org/annotations/wb.gaf.gz | gzip -dcf > target/groups/wb/wb.gaf'
 					sh 'wget http://snapshot.geneontology.org/ontology/go.json -O target/go-ontology.json'
 
+					sh 'python3 --version'
 					sh 'python3 ./mypyenv/bin/materialize.py --log target/groups/mgi/mgi-inferences.log infer --ontology target/go-ontology.json --target target/groups/mgi/mgi.inferred.gaf --gaf target/groups/mgi/mgi.gaf'
 					sh 'python3 ./mypyenv/bin/materialize.py --log target/groups/pombase/pombase-inferences.log infer --ontology target/go-ontology.json --target target/groups/pombase/pombase.inferred.gaf --gaf target/groups/pombase/pombase.gaf'
 					sh 'python3 ./mypyenv/bin/materialize.py --log target/groups/wb/wb-inferences.log infer --ontology target/go-ontology.json --target target/groups/wb/wb.inferred.gaf --gaf target/groups/wb/wb.gaf'
