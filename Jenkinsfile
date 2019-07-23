@@ -31,15 +31,15 @@ pipeline {
 	///
 
 	// The branch of geneontology/go-site to use.
-	TARGET_GO_SITE_BRANCH = 'master'
+	TARGET_GO_SITE_BRANCH = 'group_gaferencer_script'
 	// The people to call when things go bad. It is a comma-space
 	// "separated" string.
-	TARGET_ADMIN_EMAILS = 'sjcarbon@lbl.gov'
-	TARGET_SUCCESS_EMAILS = 'sjcarbon@lbl.gov,suzia@stanford.edu'
+	TARGET_ADMIN_EMAILS = 'edouglass@lbl.gov'
+	TARGET_SUCCESS_EMAILS = 'edouglass@lbl.gov'
 	// The file bucket(/folder) combination to use.
-	TARGET_BUCKET = 'go-data-product-experimental'
+	TARGET_BUCKET = 'no'
 	// The URL prefix to use when creating site indices.
-	TARGET_INDEXER_PREFIX = 'http://experimental.geneontology.io'
+	TARGET_INDEXER_PREFIX = 'nope'
 	// This variable should typically be 'TRUE', which will cause
 	// some additional basic checks to be made. There are some
 	// very exotic cases where these check may need to be skipped
@@ -59,8 +59,8 @@ pipeline {
 
 	// The Zenodo concept ID to use for releases (and occasionally
 	// master testing).
-	ZENODO_REFERENCE_CONCEPT = '252781'
-	ZENODO_ARCHIVE_CONCEPT = '252779'
+	ZENODO_REFERENCE_CONCEPT = ''
+	ZENODO_ARCHIVE_CONCEPT = ''
 	// Distribution ID for the AWS CloudFront for this branch,
 	// used soley for invalidations. Versioned release does not
 	// need this as it is always a new location and the index
@@ -130,7 +130,7 @@ pipeline {
 	//GORULE_TAGS_TO_SUPPRESS="silent"
 
 	// Optional. Groups to run.
-	RESOURCE_GROUPS="aspgd goa wb pseudocap"
+	RESOURCE_GROUPS="goa wb pseudocap pamgo"
 	// Optional. Datasets to skip within the resources that we
 	// will run (defined in the line above).
 	DATASET_EXCLUDES="goa_uniprot_gcrp goa_pdb goa_chicken_isoform goa_chicken_rna goa_cow goa_cow_complex goa_cow_isoform goa_cow_rna goa_dog goa_dog_complex goa_dog_isoform goa_dog_rna goa_human goa_human goa_human_complex goa_human_rna"
@@ -845,428 +845,428 @@ pipeline {
 		echo 'Sanity II: Positive user input input given.'
 	    }
 	}
-	stage('Archive') {
-	    when { anyOf { branch 'release'; branch 'snapshot'; branch 'master' } }
-	    steps {
-		// Experimental stanza to support mounting the sshfs
-		// using the "hidden" skyhook identity.
-		sh 'mkdir -p $WORKSPACE/mnt/ || true'
-		withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
-		    sh 'sshfs -oStrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY -o idmap=user skyhook@skyhook.berkeleybop.org:/home/skyhook $WORKSPACE/mnt/'
-		}
-		// Copy the product to the right location. As well,
-		// archive.
-		withCredentials([file(credentialsId: 'aws_go_push_json', variable: 'S3_PUSH_JSON'), file(credentialsId: 's3cmd_go_push_configuration', variable: 'S3CMD_JSON'), string(credentialsId: 'zenodo_go_production_token', variable: 'ZENODO_PRODUCTION_TOKEN'), string(credentialsId: 'zenodo_go_sandbox_token', variable: 'ZENODO_SANDBOX_TOKEN')]) {
-		    // Ready...
-		    dir('./go-site') {
-			git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
-
-			// WARNING: Caveats and reasons as same
-			// pattern above. We need this as some clients
-			// are not standard and it turns out there are
-			// some subtle incompatibilities with urllib3
-			// and boto in some versions, so we will use a
-			// virtual env to paper that over.  See:
-			// https://github.com/geneontology/pipeline/issues/8#issuecomment-356762604
-			sh 'python3 -m venv mypyenv'
-			withEnv(["PATH+EXTRA=${WORKSPACE}/go-site/bin:${WORKSPACE}/go-site/mypyenv/bin", 'PYTHONHOME=', "VIRTUAL_ENV=${WORKSPACE}/go-site/mypyenv", 'PY_ENV=mypyenv', 'PY_BIN=mypyenv/bin']){
-
-			    // Extra package for the indexer.
-			    sh 'python3 ./mypyenv/bin/pip3 install pystache'
-
-			    // Correct for (possibly) bad boto3,
-			    // as mentioned above.
-			    sh 'python3 ./mypyenv/bin/pip3 install boto3'
-
-			    // Extra package for the uploader.
-			    sh 'python3 ./mypyenv/bin/pip3 install filechunkio'
-
-			    // Grab BDBag.
-			    sh 'python3 ./mypyenv/bin/pip3 install bdbag'
-
-			    // Need for large uploads in requests.
-			    sh 'python3 ./mypyenv/bin/pip3 install requests-toolbelt'
-
-			    // Need as replacement for awful requests lib.
-			    sh 'python3 ./mypyenv/bin/pip3 install pycurl'
-
-			    // Apparently something wrong with default
-			    // version; error like
-			    // https://stackoverflow.com/questions/45821085/awshttpsconnection-object-has-no-attribute-ssl-context
-			    sh 'python3 ./mypyenv/bin/pip3 install awscli'
-
-			    // Well, we need to do a couple of things here in
-			    // a structured way, so we'll go ahead and drop
-			    // into the scripting mode.
-			    script {
-
-				// Build either a release or testing
-				// version of a generic BDBag/DOI
-				// workflow, keeping special bucket
-				// mappings in mind.
-				if( env.BRANCH_NAME == 'release' ){
-				    sh 'python3 ./scripts/create-bdbag-remote-file-manifest.py -v --walk $WORKSPACE/mnt/$BRANCH_NAME/ --remote http://release.geneontology.org/$START_DATE --output manifest.json'
-				}else if( env.BRANCH_NAME == 'snapshot' || env.BRANCH_NAME == 'master' ){
-				    sh 'python3 ./scripts/create-bdbag-remote-file-manifest.py -v --walk $WORKSPACE/mnt/$BRANCH_NAME/ --remote $TARGET_INDEXER_PREFIX --output manifest.json'
-				}
-
-				// Make holey BDBag in fixed directory.
-				sh 'mkdir go-release-reference'
-				sh 'python3 ./mypyenv/bin/bdbag ./go-release-reference --remote-file-manifest manifest.json --archive tgz'
-
-				// To make a full BDBag, we first need
-				// a copy of the data as BDBags change
-				// directory layout (e.g. data/).
-				sh 'mkdir -p $WORKSPACE/copyover/ || true'
-				sh 'cp -r $WORKSPACE/mnt/$BRANCH_NAME/* $WORKSPACE/copyover/'
-				// Make the BDBag in the copyover/
-				// (unarchived, as we want to leave it
-				// to pigz).
-				sh 'python3 ./mypyenv/bin/bdbag $WORKSPACE/copyover'
-				// Tarball the whole directory for
-				// "deep" archive (handmade BDBag).
-				sh 'tar --use-compress-program=pigz -cvf go-release-archive.tgz -C $WORKSPACE/copyover .'
-
-				// We have the archives, now let's try
-				// and get them into position--this is
-				// fail-y, so we are going to try and
-				// buffer failure here for the time
-				// being until we work it all out.
-				try {
-				    // Archive the holey bdbag for
-				    // this run.
-				    if( env.BRANCH_NAME == 'release' ){
-					sh 'python3 ./scripts/zenodo-version-update.py --verbose --key $ZENODO_PRODUCTION_TOKEN --concept $ZENODO_REFERENCE_CONCEPT --file go-release-reference.tgz --output ./release-reference-doi.json --revision $START_DATE'
-				    }else if( env.BRANCH_NAME == 'snapshot' ){
-					sh 'python3 ./scripts/zenodo-version-update.py --verbose --sandbox --key $ZENODO_SANDBOX_TOKEN --concept $ZENODO_REFERENCE_CONCEPT --file go-release-reference.tgz --output ./release-reference-doi.json --revision $START_DATE'
-				    }else if( env.BRANCH_NAME == 'master' ){
-					sh 'python3 ./scripts/zenodo-version-update.py --verbose --sandbox --key $ZENODO_SANDBOX_TOKEN --concept $ZENODO_REFERENCE_CONCEPT --file go-release-reference.tgz --output ./release-reference-doi.json --revision $START_DATE'
-				    }
-				    // Copy the referential metadata
-				    // files and DOI to skyhook
-				    // metadata/ for easy inspection.
-				    sh 'cp go-release-reference.tgz $WORKSPACE/mnt/$BRANCH_NAME/metadata/go-release-reference.tgz'
-				    sh 'cp manifest.json $WORKSPACE/mnt/$BRANCH_NAME/metadata/bdbag-manifest.json'
-				    sh 'cp release-reference-doi.json $WORKSPACE/mnt/$BRANCH_NAME/metadata/release-reference-doi.json'
-				} catch (exception) {
-				    // Something went bad with the
-				    // Zenodo reference upload.
-				    echo "There has been a failure in the reference upload to Zenodo."
-				    mail bcc: '', body: "There has been a failure in the reference upload to Zenodo, in ${env.BRANCH_NAME}. Please see: https://build.geneontology.org/job/geneontology/job/pipeline/job/${env.BRANCH_NAME}", cc: '', from: '', replyTo: '', subject: "GO Pipeline Zenodo reference upload fail for ${env.BRANCH_NAME}", to: "${TARGET_ADMIN_EMAILS}"
-				    // Hard die if this is a release.
-				    if( env.BRANCH_NAME == 'release' ){
-					error 'Zenodo reference upload error on release--no recovery.'
-				    }
-				}
-				try {
-				    // Archive full archive too.
-				    if( env.BRANCH_NAME == 'release' ){
-					sh 'python3 ./scripts/zenodo-version-update.py --verbose --key $ZENODO_PRODUCTION_TOKEN --concept $ZENODO_ARCHIVE_CONCEPT --file go-release-archive.tgz --output ./release-archive-doi.json --revision $START_DATE'
-				    }else if( env.BRANCH_NAME == 'snapshot' ){
-					// WARNING: to save Zenodo 1TB
-					// a month, for snapshot,
-					// we'll lie about the DOI
-					// that we get (not a big lie
-					// as they don't resolve on
-					// sandbox anyways).
-					//sh 'python3 ./scripts/zenodo-version-update.py --verbose --sandbox --key $ZENODO_SANDBOX_TOKEN --concept $ZENODO_ARCHIVE_CONCEPT --file go-release-archive.tgz --output ./release-archive-doi.json --revision $START_DATE'
-					sh 'cp ./release-reference-doi.json ./release-archive-doi.json'
-				    }else if( env.BRANCH_NAME == 'master' ){
-					sh 'python3 ./scripts/zenodo-version-update.py --verbose --sandbox --key $ZENODO_SANDBOX_TOKEN --concept $ZENODO_ARCHIVE_CONCEPT --file go-release-archive.tgz --output ./release-archive-doi.json --revision $START_DATE'
-				    }
-				    // Get the DOI to skyhook for
-				    // publishing, but don't bother
-				    // with the full thing--too much
-				    // space and already in Zenodo.
-				    sh 'cp release-archive-doi.json $WORKSPACE/mnt/$BRANCH_NAME/metadata/release-archive-doi.json'
-				} catch (exception) {
-				    // Something went bad with the
-				    // Zenodo archive upload.
-				    echo "There has been a failure in the archive upload to Zenodo."
-				    mail bcc: '', body: "There has been a failure in the archive upload to Zenodo, in ${env.BRANCH_NAME}. Please see: https://build.geneontology.org/job/geneontology/job/pipeline/job/${env.BRANCH_NAME}", cc: '', from: '', replyTo: '', subject: "GO Pipeline Zenodo archive upload fail for ${env.BRANCH_NAME}", to: "${TARGET_ADMIN_EMAILS}"
-				    // Hard die if this is a release.
-				    if( env.BRANCH_NAME == 'release' ){
-					error 'Zenodo archive upload error on release--no recovery.'
-				    }
-				}
-			    }
-			}
-		    }
-		}
-	    }
-	    // WARNING: Extra safety as I expect this to sometimes fail.
-	    post {
-                always {
-		    // Bail on the remote filesystem.
-		    sh 'fusermount -u $WORKSPACE/mnt/ || true'
-		    // Purge the copyover point.
-		    sh 'rm -r -f $WORKSPACE/copyover || true'
-		}
-	    }
-	}
-	stage('Publish') {
-	    when { anyOf { branch 'release'; branch 'snapshot'; branch 'master' } }
-	    steps {
-		// Experimental stanza to support mounting the sshfs
-		// using the "hidden" skyhook identity.
-		sh 'mkdir -p $WORKSPACE/mnt/ || true'
-		withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
-		    sh 'sshfs -oStrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY -o idmap=user skyhook@skyhook.berkeleybop.org:/home/skyhook $WORKSPACE/mnt/'
-		}
-		// Copy the product to the right location. As well,
-		// archive.
-		withCredentials([file(credentialsId: 'aws_go_push_json', variable: 'S3_PUSH_JSON'), file(credentialsId: 's3cmd_go_push_configuration', variable: 'S3CMD_JSON'), string(credentialsId: 'aws_go_access_key', variable: 'AWS_ACCESS_KEY_ID'), string(credentialsId: 'aws_go_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
-		    // Ready...
-		    dir('./go-site') {
-			git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
-
-			// TODO: Special handling still needed w/o OSF.io?
-			// WARNING: Caveats and reasons as same
-			// pattern above. We need this as some clients
-			// are not standard and it turns out there are
-			// some subtle incompatibilities with urllib3
-			// and boto in some versions, so we will use a
-			// virtual env to paper that over.  See:
-			// https://github.com/geneontology/pipeline/issues/8#issuecomment-356762604
-			sh 'python3 -m venv mypyenv'
-			withEnv(["PATH+EXTRA=${WORKSPACE}/go-site/bin:${WORKSPACE}/go-site/mypyenv/bin", 'PYTHONHOME=', "VIRTUAL_ENV=${WORKSPACE}/go-site/mypyenv", 'PY_ENV=mypyenv', 'PY_BIN=mypyenv/bin']){
-
-			    // Extra package for the indexer.
-			    sh 'python3 ./mypyenv/bin/pip3 install pystache'
-
-			    // Correct for (possibly) bad boto3,
-			    // as mentioned above.
-			    sh 'python3 ./mypyenv/bin/pip3 install boto3'
-
-			    // Extra package for the uploader.
-			    sh 'python3 ./mypyenv/bin/pip3 install filechunkio'
-
-			    // Well, we need to do a couple of things here in
-			    // a structured way, so we'll go ahead and drop
-			    // into the scripting mode.
-			    script {
-
-				// Create working index off of
-				// skyhook. For "release", this will
-				// be "current". For "snapshot", this
-				// will be "snapshot".
-		 		sh 'python3 ./scripts/directory_indexer.py -v --inject ./scripts/directory-index-template.html --directory $WORKSPACE/mnt/$BRANCH_NAME --prefix $TARGET_INDEXER_PREFIX -x'
-
-				// Push into S3 buckets. Simple
-				// overall case: copy tree directly
-				// over. For "release", this will be
-				// "current". For "snapshot", this
-				// will be "snapshot".
-				sh 'python3 ./scripts/s3-uploader.py -v --credentials $S3_PUSH_JSON --directory $WORKSPACE/mnt/$BRANCH_NAME/ --bucket $TARGET_BUCKET --number $BUILD_ID --pipeline $BRANCH_NAME'
-
-				// Also, some runs have special maps
-				// to buckets...
-				if( env.BRANCH_NAME == 'release' ){
-
-				    // "release" -> dated path for
-				    // indexing (clobbering
-				    // "current"'s index.
-		 		    sh 'python3 ./scripts/directory_indexer.py -v --inject ./scripts/directory-index-template.html --directory $WORKSPACE/mnt/$BRANCH_NAME --prefix http://release.geneontology.org/$START_DATE -x -u'
-				    // "release" -> dated path for S3.
-				    sh 'python3 ./scripts/s3-uploader.py -v --credentials $S3_PUSH_JSON --directory $WORKSPACE/mnt/$BRANCH_NAME/ --bucket go-data-product-release/$START_DATE --number $BUILD_ID --pipeline $BRANCH_NAME'
-
-				    // Build the capper index.html...
-				    sh 'python3 ./scripts/bucket-indexer.py --credentials $S3_PUSH_JSON --bucket go-data-product-release --inject ./scripts/directory-index-template.html --prefix http://release.geneontology.org > top-level-index.html'
-				    // ...and push it up to S3.
-				    sh 's3cmd -c $S3CMD_JSON --acl-public --mime-type=text/html --cf-invalidate put top-level-index.html s3://go-data-product-release/index.html'
-
-				}else if( env.BRANCH_NAME == 'snapshot' ){
-
-				    // Currently, the "daily"
-				    // debugging buckets are intended
-				    // to be RO directly in S3 for
-				    // debugging.
-				    sh 'python3 ./scripts/s3-uploader.py -v --credentials $S3_PUSH_JSON --directory $WORKSPACE/mnt/$BRANCH_NAME/ --bucket go-data-product-daily/$START_DAY --number $BUILD_ID --pipeline $BRANCH_NAME'
-
-				}else if( env.BRANCH_NAME == 'master' ){
-				    // Pass.
-				}
-
-				// Invalidate the CDN now that the new
-				// files are up.
-				sh 'echo "[preview]" > ./awscli_config.txt && echo "cloudfront=true" >> ./awscli_config.txt'
-				sh 'AWS_CONFIG_FILE=./awscli_config.txt python3 ./mypyenv/bin/aws cloudfront create-invalidation --distribution-id $AWS_CLOUDFRONT_DISTRIBUTION_ID --paths "/*"'
-				// The release branch also needs to
-				// deal with the second location.
-				if( env.BRANCH_NAME == 'release' ){
-				    sh 'AWS_CONFIG_FILE=./awscli_config.txt python3 ./mypyenv/bin/aws cloudfront create-invalidation --distribution-id $AWS_CLOUDFRONT_RELEASE_DISTRIBUTION_ID --paths "/*"'
-				}
-			    }
-			}
-		    }
-		}
-	    }
-	    // WARNING: Extra safety as I expect this to sometimes fail.
-	    post {
-                always {
-		    // Bail on the remote filesystem.
-		    sh 'fusermount -u $WORKSPACE/mnt/ || true'
-		}
-	    }
-	}
+	// stage('Archive') {
+	//     when { anyOf { branch 'release'; branch 'snapshot'; branch 'master' } }
+	//     steps {
+	// 	// Experimental stanza to support mounting the sshfs
+	// 	// using the "hidden" skyhook identity.
+	// 	sh 'mkdir -p $WORKSPACE/mnt/ || true'
+	// 	withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
+	// 	    sh 'sshfs -oStrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY -o idmap=user skyhook@skyhook.berkeleybop.org:/home/skyhook $WORKSPACE/mnt/'
+	// 	}
+	// 	// Copy the product to the right location. As well,
+	// 	// archive.
+	// 	withCredentials([file(credentialsId: 'aws_go_push_json', variable: 'S3_PUSH_JSON'), file(credentialsId: 's3cmd_go_push_configuration', variable: 'S3CMD_JSON'), string(credentialsId: 'zenodo_go_production_token', variable: 'ZENODO_PRODUCTION_TOKEN'), string(credentialsId: 'zenodo_go_sandbox_token', variable: 'ZENODO_SANDBOX_TOKEN')]) {
+	// 	    // Ready...
+	// 	    dir('./go-site') {
+	// 		git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
+  //
+	// 		// WARNING: Caveats and reasons as same
+	// 		// pattern above. We need this as some clients
+	// 		// are not standard and it turns out there are
+	// 		// some subtle incompatibilities with urllib3
+	// 		// and boto in some versions, so we will use a
+	// 		// virtual env to paper that over.  See:
+	// 		// https://github.com/geneontology/pipeline/issues/8#issuecomment-356762604
+	// 		sh 'python3 -m venv mypyenv'
+	// 		withEnv(["PATH+EXTRA=${WORKSPACE}/go-site/bin:${WORKSPACE}/go-site/mypyenv/bin", 'PYTHONHOME=', "VIRTUAL_ENV=${WORKSPACE}/go-site/mypyenv", 'PY_ENV=mypyenv', 'PY_BIN=mypyenv/bin']){
+  //
+	// 		    // Extra package for the indexer.
+	// 		    sh 'python3 ./mypyenv/bin/pip3 install pystache'
+  //
+	// 		    // Correct for (possibly) bad boto3,
+	// 		    // as mentioned above.
+	// 		    sh 'python3 ./mypyenv/bin/pip3 install boto3'
+  //
+	// 		    // Extra package for the uploader.
+	// 		    sh 'python3 ./mypyenv/bin/pip3 install filechunkio'
+  //
+	// 		    // Grab BDBag.
+	// 		    sh 'python3 ./mypyenv/bin/pip3 install bdbag'
+  //
+	// 		    // Need for large uploads in requests.
+	// 		    sh 'python3 ./mypyenv/bin/pip3 install requests-toolbelt'
+  //
+	// 		    // Need as replacement for awful requests lib.
+	// 		    sh 'python3 ./mypyenv/bin/pip3 install pycurl'
+  //
+	// 		    // Apparently something wrong with default
+	// 		    // version; error like
+	// 		    // https://stackoverflow.com/questions/45821085/awshttpsconnection-object-has-no-attribute-ssl-context
+	// 		    sh 'python3 ./mypyenv/bin/pip3 install awscli'
+  //
+	// 		    // Well, we need to do a couple of things here in
+	// 		    // a structured way, so we'll go ahead and drop
+	// 		    // into the scripting mode.
+	// 		    script {
+  //
+	// 			// Build either a release or testing
+	// 			// version of a generic BDBag/DOI
+	// 			// workflow, keeping special bucket
+	// 			// mappings in mind.
+	// 			if( env.BRANCH_NAME == 'release' ){
+	// 			    sh 'python3 ./scripts/create-bdbag-remote-file-manifest.py -v --walk $WORKSPACE/mnt/$BRANCH_NAME/ --remote http://release.geneontology.org/$START_DATE --output manifest.json'
+	// 			}else if( env.BRANCH_NAME == 'snapshot' || env.BRANCH_NAME == 'master' ){
+	// 			    sh 'python3 ./scripts/create-bdbag-remote-file-manifest.py -v --walk $WORKSPACE/mnt/$BRANCH_NAME/ --remote $TARGET_INDEXER_PREFIX --output manifest.json'
+	// 			}
+  //
+	// 			// Make holey BDBag in fixed directory.
+	// 			sh 'mkdir go-release-reference'
+	// 			sh 'python3 ./mypyenv/bin/bdbag ./go-release-reference --remote-file-manifest manifest.json --archive tgz'
+  //
+	// 			// To make a full BDBag, we first need
+	// 			// a copy of the data as BDBags change
+	// 			// directory layout (e.g. data/).
+	// 			sh 'mkdir -p $WORKSPACE/copyover/ || true'
+	// 			sh 'cp -r $WORKSPACE/mnt/$BRANCH_NAME/* $WORKSPACE/copyover/'
+	// 			// Make the BDBag in the copyover/
+	// 			// (unarchived, as we want to leave it
+	// 			// to pigz).
+	// 			sh 'python3 ./mypyenv/bin/bdbag $WORKSPACE/copyover'
+	// 			// Tarball the whole directory for
+	// 			// "deep" archive (handmade BDBag).
+	// 			sh 'tar --use-compress-program=pigz -cvf go-release-archive.tgz -C $WORKSPACE/copyover .'
+  //
+	// 			// We have the archives, now let's try
+	// 			// and get them into position--this is
+	// 			// fail-y, so we are going to try and
+	// 			// buffer failure here for the time
+	// 			// being until we work it all out.
+	// 			try {
+	// 			    // Archive the holey bdbag for
+	// 			    // this run.
+	// 			    if( env.BRANCH_NAME == 'release' ){
+	// 				sh 'python3 ./scripts/zenodo-version-update.py --verbose --key $ZENODO_PRODUCTION_TOKEN --concept $ZENODO_REFERENCE_CONCEPT --file go-release-reference.tgz --output ./release-reference-doi.json --revision $START_DATE'
+	// 			    }else if( env.BRANCH_NAME == 'snapshot' ){
+	// 				sh 'python3 ./scripts/zenodo-version-update.py --verbose --sandbox --key $ZENODO_SANDBOX_TOKEN --concept $ZENODO_REFERENCE_CONCEPT --file go-release-reference.tgz --output ./release-reference-doi.json --revision $START_DATE'
+	// 			    }else if( env.BRANCH_NAME == 'master' ){
+	// 				sh 'python3 ./scripts/zenodo-version-update.py --verbose --sandbox --key $ZENODO_SANDBOX_TOKEN --concept $ZENODO_REFERENCE_CONCEPT --file go-release-reference.tgz --output ./release-reference-doi.json --revision $START_DATE'
+	// 			    }
+	// 			    // Copy the referential metadata
+	// 			    // files and DOI to skyhook
+	// 			    // metadata/ for easy inspection.
+	// 			    sh 'cp go-release-reference.tgz $WORKSPACE/mnt/$BRANCH_NAME/metadata/go-release-reference.tgz'
+	// 			    sh 'cp manifest.json $WORKSPACE/mnt/$BRANCH_NAME/metadata/bdbag-manifest.json'
+	// 			    sh 'cp release-reference-doi.json $WORKSPACE/mnt/$BRANCH_NAME/metadata/release-reference-doi.json'
+	// 			} catch (exception) {
+	// 			    // Something went bad with the
+	// 			    // Zenodo reference upload.
+	// 			    echo "There has been a failure in the reference upload to Zenodo."
+	// 			    mail bcc: '', body: "There has been a failure in the reference upload to Zenodo, in ${env.BRANCH_NAME}. Please see: https://build.geneontology.org/job/geneontology/job/pipeline/job/${env.BRANCH_NAME}", cc: '', from: '', replyTo: '', subject: "GO Pipeline Zenodo reference upload fail for ${env.BRANCH_NAME}", to: "${TARGET_ADMIN_EMAILS}"
+	// 			    // Hard die if this is a release.
+	// 			    if( env.BRANCH_NAME == 'release' ){
+	// 				error 'Zenodo reference upload error on release--no recovery.'
+	// 			    }
+	// 			}
+	// 			try {
+	// 			    // Archive full archive too.
+	// 			    if( env.BRANCH_NAME == 'release' ){
+	// 				sh 'python3 ./scripts/zenodo-version-update.py --verbose --key $ZENODO_PRODUCTION_TOKEN --concept $ZENODO_ARCHIVE_CONCEPT --file go-release-archive.tgz --output ./release-archive-doi.json --revision $START_DATE'
+	// 			    }else if( env.BRANCH_NAME == 'snapshot' ){
+	// 				// WARNING: to save Zenodo 1TB
+	// 				// a month, for snapshot,
+	// 				// we'll lie about the DOI
+	// 				// that we get (not a big lie
+	// 				// as they don't resolve on
+	// 				// sandbox anyways).
+	// 				//sh 'python3 ./scripts/zenodo-version-update.py --verbose --sandbox --key $ZENODO_SANDBOX_TOKEN --concept $ZENODO_ARCHIVE_CONCEPT --file go-release-archive.tgz --output ./release-archive-doi.json --revision $START_DATE'
+	// 				sh 'cp ./release-reference-doi.json ./release-archive-doi.json'
+	// 			    }else if( env.BRANCH_NAME == 'master' ){
+	// 				sh 'python3 ./scripts/zenodo-version-update.py --verbose --sandbox --key $ZENODO_SANDBOX_TOKEN --concept $ZENODO_ARCHIVE_CONCEPT --file go-release-archive.tgz --output ./release-archive-doi.json --revision $START_DATE'
+	// 			    }
+	// 			    // Get the DOI to skyhook for
+	// 			    // publishing, but don't bother
+	// 			    // with the full thing--too much
+	// 			    // space and already in Zenodo.
+	// 			    sh 'cp release-archive-doi.json $WORKSPACE/mnt/$BRANCH_NAME/metadata/release-archive-doi.json'
+	// 			} catch (exception) {
+	// 			    // Something went bad with the
+	// 			    // Zenodo archive upload.
+	// 			    echo "There has been a failure in the archive upload to Zenodo."
+	// 			    mail bcc: '', body: "There has been a failure in the archive upload to Zenodo, in ${env.BRANCH_NAME}. Please see: https://build.geneontology.org/job/geneontology/job/pipeline/job/${env.BRANCH_NAME}", cc: '', from: '', replyTo: '', subject: "GO Pipeline Zenodo archive upload fail for ${env.BRANCH_NAME}", to: "${TARGET_ADMIN_EMAILS}"
+	// 			    // Hard die if this is a release.
+	// 			    if( env.BRANCH_NAME == 'release' ){
+	// 				error 'Zenodo archive upload error on release--no recovery.'
+	// 			    }
+	// 			}
+	// 		    }
+	// 		}
+	// 	    }
+	// 	}
+	//     }
+	//     // WARNING: Extra safety as I expect this to sometimes fail.
+	//     post {
+  //               always {
+	// 	    // Bail on the remote filesystem.
+	// 	    sh 'fusermount -u $WORKSPACE/mnt/ || true'
+	// 	    // Purge the copyover point.
+	// 	    sh 'rm -r -f $WORKSPACE/copyover || true'
+	// 	}
+	//     }
+	// }
+	// stage('Publish') {
+	//     when { anyOf { branch 'release'; branch 'snapshot'; branch 'master' } }
+	//     steps {
+	// 	// Experimental stanza to support mounting the sshfs
+	// 	// using the "hidden" skyhook identity.
+	// 	sh 'mkdir -p $WORKSPACE/mnt/ || true'
+	// 	withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
+	// 	    sh 'sshfs -oStrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY -o idmap=user skyhook@skyhook.berkeleybop.org:/home/skyhook $WORKSPACE/mnt/'
+	// 	}
+	// 	// Copy the product to the right location. As well,
+	// 	// archive.
+	// 	withCredentials([file(credentialsId: 'aws_go_push_json', variable: 'S3_PUSH_JSON'), file(credentialsId: 's3cmd_go_push_configuration', variable: 'S3CMD_JSON'), string(credentialsId: 'aws_go_access_key', variable: 'AWS_ACCESS_KEY_ID'), string(credentialsId: 'aws_go_secret_key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
+	// 	    // Ready...
+	// 	    dir('./go-site') {
+	// 		git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
+  //
+	// 		// TODO: Special handling still needed w/o OSF.io?
+	// 		// WARNING: Caveats and reasons as same
+	// 		// pattern above. We need this as some clients
+	// 		// are not standard and it turns out there are
+	// 		// some subtle incompatibilities with urllib3
+	// 		// and boto in some versions, so we will use a
+	// 		// virtual env to paper that over.  See:
+	// 		// https://github.com/geneontology/pipeline/issues/8#issuecomment-356762604
+	// 		sh 'python3 -m venv mypyenv'
+	// 		withEnv(["PATH+EXTRA=${WORKSPACE}/go-site/bin:${WORKSPACE}/go-site/mypyenv/bin", 'PYTHONHOME=', "VIRTUAL_ENV=${WORKSPACE}/go-site/mypyenv", 'PY_ENV=mypyenv', 'PY_BIN=mypyenv/bin']){
+  //
+	// 		    // Extra package for the indexer.
+	// 		    sh 'python3 ./mypyenv/bin/pip3 install pystache'
+  //
+	// 		    // Correct for (possibly) bad boto3,
+	// 		    // as mentioned above.
+	// 		    sh 'python3 ./mypyenv/bin/pip3 install boto3'
+  //
+	// 		    // Extra package for the uploader.
+	// 		    sh 'python3 ./mypyenv/bin/pip3 install filechunkio'
+  //
+	// 		    // Well, we need to do a couple of things here in
+	// 		    // a structured way, so we'll go ahead and drop
+	// 		    // into the scripting mode.
+	// 		    script {
+  //
+	// 			// Create working index off of
+	// 			// skyhook. For "release", this will
+	// 			// be "current". For "snapshot", this
+	// 			// will be "snapshot".
+	// 	 		sh 'python3 ./scripts/directory_indexer.py -v --inject ./scripts/directory-index-template.html --directory $WORKSPACE/mnt/$BRANCH_NAME --prefix $TARGET_INDEXER_PREFIX -x'
+  //
+	// 			// Push into S3 buckets. Simple
+	// 			// overall case: copy tree directly
+	// 			// over. For "release", this will be
+	// 			// "current". For "snapshot", this
+	// 			// will be "snapshot".
+	// 			sh 'python3 ./scripts/s3-uploader.py -v --credentials $S3_PUSH_JSON --directory $WORKSPACE/mnt/$BRANCH_NAME/ --bucket $TARGET_BUCKET --number $BUILD_ID --pipeline $BRANCH_NAME'
+  //
+	// 			// Also, some runs have special maps
+	// 			// to buckets...
+	// 			if( env.BRANCH_NAME == 'release' ){
+  //
+	// 			    // "release" -> dated path for
+	// 			    // indexing (clobbering
+	// 			    // "current"'s index.
+	// 	 		    sh 'python3 ./scripts/directory_indexer.py -v --inject ./scripts/directory-index-template.html --directory $WORKSPACE/mnt/$BRANCH_NAME --prefix http://release.geneontology.org/$START_DATE -x -u'
+	// 			    // "release" -> dated path for S3.
+	// 			    sh 'python3 ./scripts/s3-uploader.py -v --credentials $S3_PUSH_JSON --directory $WORKSPACE/mnt/$BRANCH_NAME/ --bucket go-data-product-release/$START_DATE --number $BUILD_ID --pipeline $BRANCH_NAME'
+  //
+	// 			    // Build the capper index.html...
+	// 			    sh 'python3 ./scripts/bucket-indexer.py --credentials $S3_PUSH_JSON --bucket go-data-product-release --inject ./scripts/directory-index-template.html --prefix http://release.geneontology.org > top-level-index.html'
+	// 			    // ...and push it up to S3.
+	// 			    sh 's3cmd -c $S3CMD_JSON --acl-public --mime-type=text/html --cf-invalidate put top-level-index.html s3://go-data-product-release/index.html'
+  //
+	// 			}else if( env.BRANCH_NAME == 'snapshot' ){
+  //
+	// 			    // Currently, the "daily"
+	// 			    // debugging buckets are intended
+	// 			    // to be RO directly in S3 for
+	// 			    // debugging.
+	// 			    sh 'python3 ./scripts/s3-uploader.py -v --credentials $S3_PUSH_JSON --directory $WORKSPACE/mnt/$BRANCH_NAME/ --bucket go-data-product-daily/$START_DAY --number $BUILD_ID --pipeline $BRANCH_NAME'
+  //
+	// 			}else if( env.BRANCH_NAME == 'master' ){
+	// 			    // Pass.
+	// 			}
+  //
+	// 			// Invalidate the CDN now that the new
+	// 			// files are up.
+	// 			sh 'echo "[preview]" > ./awscli_config.txt && echo "cloudfront=true" >> ./awscli_config.txt'
+	// 			sh 'AWS_CONFIG_FILE=./awscli_config.txt python3 ./mypyenv/bin/aws cloudfront create-invalidation --distribution-id $AWS_CLOUDFRONT_DISTRIBUTION_ID --paths "/*"'
+	// 			// The release branch also needs to
+	// 			// deal with the second location.
+	// 			if( env.BRANCH_NAME == 'release' ){
+	// 			    sh 'AWS_CONFIG_FILE=./awscli_config.txt python3 ./mypyenv/bin/aws cloudfront create-invalidation --distribution-id $AWS_CLOUDFRONT_RELEASE_DISTRIBUTION_ID --paths "/*"'
+	// 			}
+	// 		    }
+	// 		}
+	// 	    }
+	// 	}
+	//     }
+	//     // WARNING: Extra safety as I expect this to sometimes fail.
+	//     post {
+  //               always {
+	// 	    // Bail on the remote filesystem.
+	// 	    sh 'fusermount -u $WORKSPACE/mnt/ || true'
+	// 	}
+	//     }
+	// }
 	// Big things to do on major branches.
-	stage('Deploy') {
-	    when { anyOf { branch 'release'; branch 'snapshot'; branch 'master' } }
-	    steps {
-		parallel(
-		    "SVN Export": {
-			script {
-			    if( env.BRANCH_NAME == 'release' ){
-				///
-				/// Legacy SVN backport for release
-				/// only.
-				///
-				echo 'Backport to legacy SVN'
-
-				// Get a mount point ready
-				sh 'mkdir -p $WORKSPACE/mnt || true'
-				// Ninja in our file credentials from Jenkins.
-				withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), file(credentialsId: 'go-svn-private-key', variable: 'GO_SVN_IDENTITY')]) {
-				    // Setup our svn+ssh to have the right credentials.
-				    withEnv(["SVN_SSH=ssh -l jenkins -i ${GO_SVN_IDENTITY}"]){
-
-					// // Try and debug connection issues on next run.
-					// sh 'echo $GO_SVN_IDENTITY > deploy-ident.txt'
-					// sh 'echo $SVN_SSH > deploy-svn-ssh.txt'
-					// sh 'cat deploy-ident.txt'
-					// sh 'cat deploy-svn-ssh.txt'
-
-					// Attach sshfs.
-					sh 'sshfs -oStrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY -o idmap=user skyhook@skyhook.berkeleybop.org:/home/skyhook $WORKSPACE/mnt/'
-
-					// Checkout the SVN for just the top-level
-					// gene-associations.
-					sh 'svn --non-interactive --ignore-externals --depth files checkout svn+ssh://ext.geneontology.org/share/go/svn/trunk/gene-associations $WORKSPACE/goannsvn'
-
-					// Copy the files over to the right spot.
-					// 45 items.
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/aspgd.gaf.gz $WORKSPACE/goannsvn/gene_association.aspgd.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/cgd.gaf.gz $WORKSPACE/goannsvn/gene_association.cgd.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/dictybase.gaf.gz $WORKSPACE/goannsvn/gene_association.dictyBase.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/ecocyc.gaf.gz $WORKSPACE/goannsvn/gene_association.ecocyc.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/fb.gaf.gz $WORKSPACE/goannsvn/gene_association.fb.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/gramene_oryza.gaf.gz $WORKSPACE/goannsvn/gene_association.gramene_oryza.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/jcvi.gaf.gz $WORKSPACE/goannsvn/gene_association.jcvi.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/mgi.gaf.gz $WORKSPACE/goannsvn/gene_association.mgi.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/pombase.gaf.gz $WORKSPACE/goannsvn/gene_association.pombase.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/pseudocap.gaf.gz $WORKSPACE/goannsvn/gene_association.pseudocap.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/reactome.gaf.gz $WORKSPACE/goannsvn/gene_association.reactome.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/rgd.gaf.gz $WORKSPACE/goannsvn/gene_association.rgd.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/sgd.gaf.gz $WORKSPACE/goannsvn/gene_association.sgd.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/sgn.gaf.gz $WORKSPACE/goannsvn/gene_association.sgn.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/tair.gaf.gz $WORKSPACE/goannsvn/gene_association.tair.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/wb.gaf.gz $WORKSPACE/goannsvn/gene_association.wb.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/zfin.gaf.gz $WORKSPACE/goannsvn/gene_association.zfin.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/genedb_lmajor.gaf.gz $WORKSPACE/goannsvn/gene_association.GeneDB_Lmajor.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/genedb_pfalciparum.gaf.gz $WORKSPACE/goannsvn/gene_association.GeneDB_Pfalciparum.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/genedb_tbrucei.gaf.gz $WORKSPACE/goannsvn/gene_association.GeneDB_Tbrucei.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/pamgo_atumefaciens.gaf.gz $WORKSPACE/goannsvn/gene_association.PAMGO_Atumefaciens.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/pamgo_ddadantii.gaf.gz $WORKSPACE/goannsvn/gene_association.PAMGO_Ddadantii.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/pamgo_mgrisea.gaf.gz $WORKSPACE/goannsvn/gene_association.PAMGO_Mgrisea.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/pamgo_oomycetes.gaf.gz $WORKSPACE/goannsvn/gene_association.PAMGO_Oomycetes.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_chicken_complex.gaf.gz $WORKSPACE/goannsvn/goa_chicken_complex.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_chicken.gaf.gz $WORKSPACE/goannsvn/goa_chicken.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_chicken_isoform.gaf.gz $WORKSPACE/goannsvn/goa_chicken_isoform.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_chicken_rna.gaf.gz $WORKSPACE/goannsvn/goa_chicken_rna.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_cow_complex.gaf.gz $WORKSPACE/goannsvn/goa_cow_complex.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_cow.gaf.gz $WORKSPACE/goannsvn/goa_cow.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_cow_isoform.gaf.gz $WORKSPACE/goannsvn/goa_cow_isoform.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_cow_rna.gaf.gz $WORKSPACE/goannsvn/goa_cow_rna.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_dog_complex.gaf.gz $WORKSPACE/goannsvn/goa_dog_complex.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_dog.gaf.gz $WORKSPACE/goannsvn/goa_dog.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_dog_isoform.gaf.gz $WORKSPACE/goannsvn/goa_dog_isoform.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_dog_rna.gaf.gz $WORKSPACE/goannsvn/goa_dog_rna.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_human_complex.gaf.gz $WORKSPACE/goannsvn/goa_human_complex.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_human.gaf.gz $WORKSPACE/goannsvn/goa_human.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_human_isoform.gaf.gz $WORKSPACE/goannsvn/goa_human_isoform.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_human_rna.gaf.gz $WORKSPACE/goannsvn/goa_human_rna.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_pig_complex.gaf.gz $WORKSPACE/goannsvn/goa_pig_complex.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_pig.gaf.gz $WORKSPACE/goannsvn/goa_pig.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_pig_isoform.gaf.gz $WORKSPACE/goannsvn/goa_pig_isoform.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_pig_rna.gaf.gz $WORKSPACE/goannsvn/goa_pig_rna.gaf.gz'
-					sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_uniprot_all_noiea.gaf.gz $WORKSPACE/goannsvn/goa_uniprot_all_noiea.gaf.gz'
-
-					// Descend and commit (all files).
-					dir('./goannsvn') {
-					    sh 'svn commit -m "Jenkins pipeline backport from $BRANCH_NAME"'
-					}
-				    }
-				}
-			    }
-			}
-		    },
-		    "AmiGO": {
-
-			// Ninja in our file credentials from Jenkins.
-			withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), file(credentialsId: 'go-svn-private-key', variable: 'GO_SVN_IDENTITY'), file(credentialsId: 'ansible-bbop-local-slave', variable: 'DEPLOY_LOCAL_IDENTITY'), file(credentialsId: 'go-aws-ec2-ansible-slave', variable: 'DEPLOY_REMOTE_IDENTITY')]) {
-
-			    // Get our operations code and decend into ansible
-			    // working directory.
-			    dir('./operations') {
-
-				git([branch: 'master',
-				     credentialsId: 'bbop-agent-github-user-pass',
-				     url: 'https://github.com/geneontology/operations.git'])
-				dir('./ansible') {
-				    ///
-				    /// Push out to an AmiGO.
-				    ///
-				    script {
-					if( env.BRANCH_NAME == 'release' ){
-
-					    echo 'No current public push on release to Blazegraph.'
-					    // retry(3){
-					    // 	sh 'ansible-playbook update-endpoint.yaml --inventory=hosts.local-rdf-endpoint --private-key="$DEPLOY_LOCAL_IDENTITY" -e target_user=bbop --extra-vars="pipeline=current build=production endpoint=production"'
-					    // }
-
-					    echo 'No current public push on release to GOlr.'
-					    // retry(3){
-					    // 	sh 'ansible-playbook ./update-golr.yaml --inventory=hosts.amigo --private-key="$DEPLOY_LOCAL_IDENTITY" -e target_host=amigo-golr-aux -e target_user=bbop'
-					    // }
-					    // retry(3){
-					    // 	sh 'ansible-playbook ./update-golr.yaml --inventory=hosts.amigo --private-key="$DEPLOY_LOCAL_IDENTITY" -e target_host=amigo-golr-production -e target_user=bbop'
-					    // }
-
-					}else if( env.BRANCH_NAME == 'snapshot' ){
-
-					    echo 'Push snapshot out internal Blazegraph'
-					    retry(3){
-						sh 'ansible-playbook update-endpoint.yaml --inventory=hosts.local-rdf-endpoint --private-key="$DEPLOY_LOCAL_IDENTITY" -e target_user=bbop --extra-vars="pipeline=current build=internal endpoint=internal"'
-					    }
-
-					    echo 'Push snapshot out to experimental AmiGO'
-					    retry(3){
-						sh 'ansible-playbook ./update-golr-w-snap.yaml --inventory=hosts.amigo --private-key="$DEPLOY_REMOTE_IDENTITY" -e target_host=amigo-golr-exp -e target_user=ubuntu'
-					    }
-
-					}else if( env.BRANCH_NAME == 'master' ){
-
-					    echo 'Push master out to experimental AmiGO'
-					    retry(3){
-						sh 'ansible-playbook ./update-golr-w-exp.yaml --inventory=hosts.amigo --private-key="$DEPLOY_REMOTE_IDENTITY" -e target_host=amigo-golr-exp -e target_user=ubuntu'
-					    }
-
-					}
-				    }
-				}
-			    }
-			}
-		    }
-		)
-	    }
-	    // WARNING: Extra safety as I expect this to sometimes fail.
-	    post {
-                always {
-		    // Bail on the remote filesystem.
-		    sh 'fusermount -u $WORKSPACE/mnt/ || true'
-                }
-	    }
-	}
+	// stage('Deploy') {
+	//     when { anyOf { branch 'release'; branch 'snapshot'; branch 'master' } }
+	//     steps {
+	// 	parallel(
+	// 	    "SVN Export": {
+	// 		script {
+	// 		    if( env.BRANCH_NAME == 'release' ){
+	// 			///
+	// 			/// Legacy SVN backport for release
+	// 			/// only.
+	// 			///
+	// 			echo 'Backport to legacy SVN'
+  //
+	// 			// Get a mount point ready
+	// 			sh 'mkdir -p $WORKSPACE/mnt || true'
+	// 			// Ninja in our file credentials from Jenkins.
+	// 			withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), file(credentialsId: 'go-svn-private-key', variable: 'GO_SVN_IDENTITY')]) {
+	// 			    // Setup our svn+ssh to have the right credentials.
+	// 			    withEnv(["SVN_SSH=ssh -l jenkins -i ${GO_SVN_IDENTITY}"]){
+  //
+	// 				// // Try and debug connection issues on next run.
+	// 				// sh 'echo $GO_SVN_IDENTITY > deploy-ident.txt'
+	// 				// sh 'echo $SVN_SSH > deploy-svn-ssh.txt'
+	// 				// sh 'cat deploy-ident.txt'
+	// 				// sh 'cat deploy-svn-ssh.txt'
+  //
+	// 				// Attach sshfs.
+	// 				sh 'sshfs -oStrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY -o idmap=user skyhook@skyhook.berkeleybop.org:/home/skyhook $WORKSPACE/mnt/'
+  //
+	// 				// Checkout the SVN for just the top-level
+	// 				// gene-associations.
+	// 				sh 'svn --non-interactive --ignore-externals --depth files checkout svn+ssh://ext.geneontology.org/share/go/svn/trunk/gene-associations $WORKSPACE/goannsvn'
+  //
+	// 				// Copy the files over to the right spot.
+	// 				// 45 items.
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/aspgd.gaf.gz $WORKSPACE/goannsvn/gene_association.aspgd.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/cgd.gaf.gz $WORKSPACE/goannsvn/gene_association.cgd.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/dictybase.gaf.gz $WORKSPACE/goannsvn/gene_association.dictyBase.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/ecocyc.gaf.gz $WORKSPACE/goannsvn/gene_association.ecocyc.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/fb.gaf.gz $WORKSPACE/goannsvn/gene_association.fb.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/gramene_oryza.gaf.gz $WORKSPACE/goannsvn/gene_association.gramene_oryza.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/jcvi.gaf.gz $WORKSPACE/goannsvn/gene_association.jcvi.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/mgi.gaf.gz $WORKSPACE/goannsvn/gene_association.mgi.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/pombase.gaf.gz $WORKSPACE/goannsvn/gene_association.pombase.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/pseudocap.gaf.gz $WORKSPACE/goannsvn/gene_association.pseudocap.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/reactome.gaf.gz $WORKSPACE/goannsvn/gene_association.reactome.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/rgd.gaf.gz $WORKSPACE/goannsvn/gene_association.rgd.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/sgd.gaf.gz $WORKSPACE/goannsvn/gene_association.sgd.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/sgn.gaf.gz $WORKSPACE/goannsvn/gene_association.sgn.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/tair.gaf.gz $WORKSPACE/goannsvn/gene_association.tair.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/wb.gaf.gz $WORKSPACE/goannsvn/gene_association.wb.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/zfin.gaf.gz $WORKSPACE/goannsvn/gene_association.zfin.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/genedb_lmajor.gaf.gz $WORKSPACE/goannsvn/gene_association.GeneDB_Lmajor.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/genedb_pfalciparum.gaf.gz $WORKSPACE/goannsvn/gene_association.GeneDB_Pfalciparum.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/genedb_tbrucei.gaf.gz $WORKSPACE/goannsvn/gene_association.GeneDB_Tbrucei.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/pamgo_atumefaciens.gaf.gz $WORKSPACE/goannsvn/gene_association.PAMGO_Atumefaciens.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/pamgo_ddadantii.gaf.gz $WORKSPACE/goannsvn/gene_association.PAMGO_Ddadantii.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/pamgo_mgrisea.gaf.gz $WORKSPACE/goannsvn/gene_association.PAMGO_Mgrisea.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/pamgo_oomycetes.gaf.gz $WORKSPACE/goannsvn/gene_association.PAMGO_Oomycetes.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_chicken_complex.gaf.gz $WORKSPACE/goannsvn/goa_chicken_complex.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_chicken.gaf.gz $WORKSPACE/goannsvn/goa_chicken.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_chicken_isoform.gaf.gz $WORKSPACE/goannsvn/goa_chicken_isoform.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_chicken_rna.gaf.gz $WORKSPACE/goannsvn/goa_chicken_rna.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_cow_complex.gaf.gz $WORKSPACE/goannsvn/goa_cow_complex.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_cow.gaf.gz $WORKSPACE/goannsvn/goa_cow.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_cow_isoform.gaf.gz $WORKSPACE/goannsvn/goa_cow_isoform.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_cow_rna.gaf.gz $WORKSPACE/goannsvn/goa_cow_rna.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_dog_complex.gaf.gz $WORKSPACE/goannsvn/goa_dog_complex.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_dog.gaf.gz $WORKSPACE/goannsvn/goa_dog.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_dog_isoform.gaf.gz $WORKSPACE/goannsvn/goa_dog_isoform.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_dog_rna.gaf.gz $WORKSPACE/goannsvn/goa_dog_rna.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_human_complex.gaf.gz $WORKSPACE/goannsvn/goa_human_complex.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_human.gaf.gz $WORKSPACE/goannsvn/goa_human.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_human_isoform.gaf.gz $WORKSPACE/goannsvn/goa_human_isoform.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_human_rna.gaf.gz $WORKSPACE/goannsvn/goa_human_rna.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_pig_complex.gaf.gz $WORKSPACE/goannsvn/goa_pig_complex.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_pig.gaf.gz $WORKSPACE/goannsvn/goa_pig.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_pig_isoform.gaf.gz $WORKSPACE/goannsvn/goa_pig_isoform.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_pig_rna.gaf.gz $WORKSPACE/goannsvn/goa_pig_rna.gaf.gz'
+	// 				sh 'cp $WORKSPACE/mnt/$BRANCH_NAME/annotations/goa_uniprot_all_noiea.gaf.gz $WORKSPACE/goannsvn/goa_uniprot_all_noiea.gaf.gz'
+  //
+	// 				// Descend and commit (all files).
+	// 				dir('./goannsvn') {
+	// 				    sh 'svn commit -m "Jenkins pipeline backport from $BRANCH_NAME"'
+	// 				}
+	// 			    }
+	// 			}
+	// 		    }
+	// 		}
+	// 	    },
+	// 	    "AmiGO": {
+  //
+	// 		// Ninja in our file credentials from Jenkins.
+	// 		withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY'), file(credentialsId: 'go-svn-private-key', variable: 'GO_SVN_IDENTITY'), file(credentialsId: 'ansible-bbop-local-slave', variable: 'DEPLOY_LOCAL_IDENTITY'), file(credentialsId: 'go-aws-ec2-ansible-slave', variable: 'DEPLOY_REMOTE_IDENTITY')]) {
+  //
+	// 		    // Get our operations code and decend into ansible
+	// 		    // working directory.
+	// 		    dir('./operations') {
+  //
+	// 			git([branch: 'master',
+	// 			     credentialsId: 'bbop-agent-github-user-pass',
+	// 			     url: 'https://github.com/geneontology/operations.git'])
+	// 			dir('./ansible') {
+	// 			    ///
+	// 			    /// Push out to an AmiGO.
+	// 			    ///
+	// 			    script {
+	// 				if( env.BRANCH_NAME == 'release' ){
+  //
+	// 				    echo 'No current public push on release to Blazegraph.'
+	// 				    // retry(3){
+	// 				    // 	sh 'ansible-playbook update-endpoint.yaml --inventory=hosts.local-rdf-endpoint --private-key="$DEPLOY_LOCAL_IDENTITY" -e target_user=bbop --extra-vars="pipeline=current build=production endpoint=production"'
+	// 				    // }
+  //
+	// 				    echo 'No current public push on release to GOlr.'
+	// 				    // retry(3){
+	// 				    // 	sh 'ansible-playbook ./update-golr.yaml --inventory=hosts.amigo --private-key="$DEPLOY_LOCAL_IDENTITY" -e target_host=amigo-golr-aux -e target_user=bbop'
+	// 				    // }
+	// 				    // retry(3){
+	// 				    // 	sh 'ansible-playbook ./update-golr.yaml --inventory=hosts.amigo --private-key="$DEPLOY_LOCAL_IDENTITY" -e target_host=amigo-golr-production -e target_user=bbop'
+	// 				    // }
+  //
+	// 				}else if( env.BRANCH_NAME == 'snapshot' ){
+  //
+	// 				    echo 'Push snapshot out internal Blazegraph'
+	// 				    retry(3){
+	// 					sh 'ansible-playbook update-endpoint.yaml --inventory=hosts.local-rdf-endpoint --private-key="$DEPLOY_LOCAL_IDENTITY" -e target_user=bbop --extra-vars="pipeline=current build=internal endpoint=internal"'
+	// 				    }
+  //
+	// 				    echo 'Push snapshot out to experimental AmiGO'
+	// 				    retry(3){
+	// 					sh 'ansible-playbook ./update-golr-w-snap.yaml --inventory=hosts.amigo --private-key="$DEPLOY_REMOTE_IDENTITY" -e target_host=amigo-golr-exp -e target_user=ubuntu'
+	// 				    }
+  //
+	// 				}else if( env.BRANCH_NAME == 'master' ){
+  //
+	// 				    echo 'Push master out to experimental AmiGO'
+	// 				    retry(3){
+	// 					sh 'ansible-playbook ./update-golr-w-exp.yaml --inventory=hosts.amigo --private-key="$DEPLOY_REMOTE_IDENTITY" -e target_host=amigo-golr-exp -e target_user=ubuntu'
+	// 				    }
+  //
+	// 				}
+	// 			    }
+	// 			}
+	// 		    }
+	// 		}
+	// 	    }
+	// 	)
+	//     }
+	//     // WARNING: Extra safety as I expect this to sometimes fail.
+	//     post {
+  //               always {
+	// 	    // Bail on the remote filesystem.
+	// 	    sh 'fusermount -u $WORKSPACE/mnt/ || true'
+  //               }
+	//     }
+	// }
 	// stage('TODO: Final status') {
 	//     steps {
 	// 	echo 'TODO: final'
