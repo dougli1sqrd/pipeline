@@ -472,10 +472,6 @@ pipeline {
 
 		    // Make minimal GAF products.
 		    dir('./pipeline') {
-			// Technically, a meaningless line as we will
-			// simulate this with entirely withEnv
-			// anyways.
-			sh '$PYTHON_CMD -m venv mypyenv'
 			// Gunna need some memory.
 			// In addition to the memory, try and simulate
 			// the environment changes for python venv activate.
@@ -485,6 +481,10 @@ pipeline {
 			    // Note environment for future debugging.
 			    sh 'env > env.txt'
 			    sh 'cat env.txt'
+          // Technically, a meaningless line as we will
+          // simulate this with entirely withEnv
+          // anyways.
+          sh '$PYTHON_CMD -m venv mypyenv'
 			    // WARNING: Okay, this is our current
 			    // workaround for the shebang line limits
 			    // and long workspace names in Jenkins
