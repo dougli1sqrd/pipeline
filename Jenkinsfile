@@ -354,56 +354,56 @@ pipeline {
 	// on the ontology release pipeline. This ticket runs
 	// daily(TODO?) and creates all the files normally included in
 	// a release, and deploys to S3.
-	stage('Produce ontology') {
-            agent {
-                docker {
-		    image 'obolibrary/odkfull:v1.1.7'
-		    // Reset Jenkins Docker agent default to original
-		    // root.
-		    args '-u root:root'
-		}
-            }
-	    steps {
-		// Create a relative working directory and setup our
-		// data environment.
-		dir('./go-ontology') {
-		    git 'https://github.com/geneontology/go-ontology.git'
-
-		    // Default namespace.
-		    sh 'OBO=http://purl.obolibrary.org/obo'
-		    sh 'RELEASEDATE=$START_DATE'
-		    sh 'env'
-
-		    dir('./src/ontology') {
-			retry(3){
-			    sh 'make all'
-			}
-			retry(3){
-			    sh 'make prepare_release'
-			}
-		    }
-
-		    // Make sure that we copy any files there,
-		    // including the core dump of produced.
-		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
-			//sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" target/* skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/ontology'
-			sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY -r target/* skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/ontology/'
-		    }
-
-		    // Now that the files are safely away onto skyhook for
-		    // debugging, test for the core dump.
-		    script {
-			if( WE_ARE_BEING_SAFE_P == 'TRUE' ){
-
-			    def found_core_dump_p = fileExists 'target/core_dump.owl'
-			    if( found_core_dump_p ){
-				error 'ROBOT core dump detected--bailing out.'
-			    }
-			}
-		    }
-		}
-	    }
-	}
+	// stage('Produce ontology') {
+  //           agent {
+  //               docker {
+	// 	    image 'obolibrary/odkfull:v1.1.7'
+	// 	    // Reset Jenkins Docker agent default to original
+	// 	    // root.
+	// 	    args '-u root:root'
+	// 	}
+  //           }
+	//     steps {
+	// 	// Create a relative working directory and setup our
+	// 	// data environment.
+	// 	dir('./go-ontology') {
+	// 	    git 'https://github.com/geneontology/go-ontology.git'
+  //
+	// 	    // Default namespace.
+	// 	    sh 'OBO=http://purl.obolibrary.org/obo'
+	// 	    sh 'RELEASEDATE=$START_DATE'
+	// 	    sh 'env'
+  //
+	// 	    dir('./src/ontology') {
+	// 		retry(3){
+	// 		    sh 'make all'
+	// 		}
+	// 		retry(3){
+	// 		    sh 'make prepare_release'
+	// 		}
+	// 	    }
+  //
+	// 	    // Make sure that we copy any files there,
+	// 	    // including the core dump of produced.
+	// 	    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
+	// 		//sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" target/* skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/ontology'
+	// 		sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY -r target/* skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/ontology/'
+	// 	    }
+  //
+	// 	    // Now that the files are safely away onto skyhook for
+	// 	    // debugging, test for the core dump.
+	// 	    script {
+	// 		if( WE_ARE_BEING_SAFE_P == 'TRUE' ){
+  //
+	// 		    def found_core_dump_p = fileExists 'target/core_dump.owl'
+	// 		    if( found_core_dump_p ){
+	// 			error 'ROBOT core dump detected--bailing out.'
+	// 		    }
+	// 		}
+	// 	    }
+	// 	}
+	//     }
+	// }
 	stage('Produce GAFs, TTLs, and journal (mega-step)') {
 	    steps {
 
