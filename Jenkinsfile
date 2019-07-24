@@ -475,7 +475,7 @@ pipeline {
 			// Technically, a meaningless line as we will
 			// simulate this with entirely withEnv
 			// anyways.
-			sh 'python3 -m venv mypyenv'
+			sh '$PYTHON_CMD -m venv mypyenv'
 			// Gunna need some memory.
 			// In addition to the memory, try and simulate
 			// the environment changes for python venv activate.
