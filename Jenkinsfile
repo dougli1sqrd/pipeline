@@ -405,6 +405,14 @@ pipeline {
 	//     }
 	// }
 	stage('Produce GAFs, TTLs, and journal (mega-step)') {
+
+    // -e RESOURCE_GROUPS=${RESOURCE_GROUPS} -e DATASET_EXCLUDES=${DATASET_EXCLUDES} -e GOA_UNIPROT_ALL_URL=${GOA_UNIPROT_ALL_URL} -e GORULE_TAGS_TO_SUPPRESS=${GORULE_TAGS_TO_SUPPRESS} -e OWLTOOLS_MEMORY=${OWLTOOLS_MEMORY} -e BGMEM=${BGMEM}
+    agent {
+      docker {
+        image 'dougli1sqrd/go-pipeline-megastep'
+        args "-v $(pwd)/:/pipeline/go-site/ -w /pipeline"
+      }
+    }
 	    steps {
 
 		// May be parallelized in the future, but may need to
@@ -477,24 +485,24 @@ pipeline {
 			// the environment changes for python venv activate.
 			// Note the complex assignment of VIRTUAL_ENV and PATH.
 			// https://jenkins.io/doc/pipeline/steps/workflow-basic-steps/#code-withenv-code-set-environment-variables
-			withEnv(['JAVA_OPTS=-Xmx128G', 'OWLTOOLS_MEMORY=128G', 'BGMEM=128G', "PATH+EXTRA=${WORKSPACE}/go-site/bin:${WORKSPACE}/go-site/pipeline/mypyenv/bin", 'PYTHONHOME=', "VIRTUAL_ENV=${WORKSPACE}/go-site/pipeline/mypyenv", 'PY_ENV=mypyenv', 'PY_BIN=mypyenv/bin', "PYTHON_CMD=python3.6"]){
+			withEnv(['JAVA_OPTS=-Xmx128G', 'OWLTOOLS_MEMORY=128G', 'BGMEM=128G', "PATH+EXTRA=${WORKSPACE}/go-site/bin:${WORKSPACE}/go-site/pipeline/mypyenv/bin", 'PYTHONHOME=', "VIRTUAL_ENV=${WORKSPACE}/go-site/pipeline/mypyenv", 'PY_ENV=mypyenv', 'PY_BIN=mypyenv/bin']){
 			    // Note environment for future debugging.
 			    sh 'env > env.txt'
 			    sh 'cat env.txt'
           // Technically, a meaningless line as we will
           // simulate this with entirely withEnv
           // anyways.
-          sh '$PYTHON_CMD -m venv mypyenv'
+          // sh '$python3 -m venv mypyenv'
 			    // WARNING: Okay, this is our current
 			    // workaround for the shebang line limits
 			    // and long workspace names in Jenkins
 			    // declarative
 			    // (https://github.com/pypa/pip/issues/1773).
 			    // There are other tacks we might take
-			    sh '$PYTHON_CMD ./mypyenv/bin/pip3 install -r requirements.txt'
-			    sh '$PYTHON_CMD ./mypyenv/bin/pip3 install ../graphstore/rule-runner'
+			    // sh 'python3 ./mypyenv/bin/pip3 install -r requirements.txt'
+			    // sh 'python3 ./mypyenv/bin/pip3 install ../graphstore/rule-runner'
 			    // Ready, set...
-			    sh '$MAKECMD clean'
+			    // sh '$MAKECMD clean'
 
 			    // Do this thing, but the watchdog sits
 			    // waiting.
@@ -522,7 +530,8 @@ pipeline {
 				    // As long as we're here and have
 				    // everything handy: this is
 				    // SPARTA!
-				    sh '$MAKECMD -e target/sparta-report.json'
+            sh 'pwd'
+				    // sh '$MAKECMD -e target/sparta-report.json'
 				}
 			    }
 			}
