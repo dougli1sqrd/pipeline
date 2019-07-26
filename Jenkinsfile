@@ -410,7 +410,7 @@ pipeline {
     agent {
       docker {
         image 'dougli1sqrd/go-pipeline-megastep:latest'
-        args "-v $(pwd)/:/pipeline/go-site/ -w /pipeline"
+        args "-v $PWD/:/pipeline/go-site/ -w /pipeline"
       }
     }
 	    steps {
