@@ -530,8 +530,8 @@ pipeline {
 				    // As long as we're here and have
 				    // everything handy: this is
 				    // SPARTA!
-            sh 'pwd'
-				    // sh '$MAKECMD -e target/sparta-report.json'
+            // sh 'pwd'
+				    sh '$MAKECMD -e target/sparta-report.json'
 				}
 			    }
 			}
