@@ -409,7 +409,7 @@ pipeline {
     // -e RESOURCE_GROUPS=${RESOURCE_GROUPS} -e DATASET_EXCLUDES=${DATASET_EXCLUDES} -e GOA_UNIPROT_ALL_URL=${GOA_UNIPROT_ALL_URL} -e GORULE_TAGS_TO_SUPPRESS=${GORULE_TAGS_TO_SUPPRESS} -e OWLTOOLS_MEMORY=${OWLTOOLS_MEMORY} -e BGMEM=${BGMEM}
     agent {
       docker {
-        image 'dougli1sqrd/go-pipeline-megastep'
+        image 'dougli1sqrd/go-pipeline-megastep:latest'
         args "-v $(pwd)/:/pipeline/go-site/ -w /pipeline"
       }
     }
