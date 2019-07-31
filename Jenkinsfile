@@ -409,7 +409,7 @@ pipeline {
     // -e RESOURCE_GROUPS=${RESOURCE_GROUPS} -e DATASET_EXCLUDES=${DATASET_EXCLUDES} -e GOA_UNIPROT_ALL_URL=${GOA_UNIPROT_ALL_URL} -e GORULE_TAGS_TO_SUPPRESS=${GORULE_TAGS_TO_SUPPRESS} -e OWLTOOLS_MEMORY=${OWLTOOLS_MEMORY} -e BGMEM=${BGMEM}
     agent {
       docker {
-        image 'geneontology/dev-base:0d001c04c424478f51fc893ccde00d06017db262_2019-07-30T151515'
+        image 'geneontology/dev-base:11e608b3c766884d4e56fd9e1524f475ff8720b6_2019-07-31T140058'
         args '-u root:root'
       }
     }
