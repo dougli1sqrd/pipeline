@@ -409,8 +409,8 @@ pipeline {
     // -e RESOURCE_GROUPS=${RESOURCE_GROUPS} -e DATASET_EXCLUDES=${DATASET_EXCLUDES} -e GOA_UNIPROT_ALL_URL=${GOA_UNIPROT_ALL_URL} -e GORULE_TAGS_TO_SUPPRESS=${GORULE_TAGS_TO_SUPPRESS} -e OWLTOOLS_MEMORY=${OWLTOOLS_MEMORY} -e BGMEM=${BGMEM}
     agent {
       docker {
-        image 'dougli1sqrd/go-pipeline-megastep:latest-2019-07-29-16.02.42'
-        args '-w /pipeline -u root:root --network="host"'
+        image 'geneontology/dev-base:0d001c04c424478f51fc893ccde00d06017db262_2019-07-30T151515'
+        args '-u root:root'
       }
     }
 	    steps {
@@ -486,7 +486,7 @@ pipeline {
 			// Note the complex assignment of VIRTUAL_ENV and PATH.
 			// https://jenkins.io/doc/pipeline/steps/workflow-basic-steps/#code-withenv-code-set-environment-variables
       // "PATH+EXTRA=${WORKSPACE}/go-site/bin:${WORKSPACE}/go-site/pipeline/mypyenv/bin", 'PYTHONHOME=', "VIRTUAL_ENV=${WORKSPACE}/go-site/pipeline/mypyenv", 'PY_ENV=mypyenv', 'PY_BIN=mypyenv/bin'
-			withEnv(['JAVA_OPTS=-Xmx128G', 'OWLTOOLS_MEMORY=128G', 'BGMEM=128G']){
+			withEnv(['JAVA_OPTS=-Xmx128G', 'OWLTOOLS_MEMORY=128G', 'BGMEM=128G', "PATH+EXTRA=${WORKSPACE}/go-site/bin:${WORKSPACE}/go-site/pipeline/mypyenv/bin", 'PYTHONHOME=', "VIRTUAL_ENV=${WORKSPACE}/go-site/pipeline/mypyenv", 'PY_ENV=mypyenv', 'PY_BIN=mypyenv/bin']){
 			    // Note environment for future debugging.
 			    sh 'env > env.txt'
 			    sh 'cat env.txt'
