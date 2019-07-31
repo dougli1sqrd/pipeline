@@ -410,7 +410,7 @@ pipeline {
     agent {
       docker {
         image 'geneontology/dev-base:11e608b3c766884d4e56fd9e1524f475ff8720b6_2019-07-31T140058'
-        args '-u root:root'
+        args "-u root:root -e WORKSPACE=${WORKSPACE}"
       }
     }
 	    steps {
