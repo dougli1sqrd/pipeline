@@ -473,7 +473,7 @@ pipeline {
 			sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/products/annotations/* ./sources/'
 
 		    }
-		    sh 'chmod +x bin/*'
+		    sh 'chmod +x /opt/pipeline/bin/*'
 
 		    sh "python3 ./scripts/download_source_gafs.py organize --datasets ./metadata/datasets --source ./sources --target ./pipeline/target/groups/"
 		    sh 'rm ./sources/*'
@@ -491,14 +491,8 @@ pipeline {
 			    sh 'env > env.txt'
 			    sh 'cat env.txt'
 
-			    // WARNING: Okay, this is our current
-			    // workaround for the shebang line limits
-			    // and long workspace names in Jenkins
-			    // declarative
-			    // (https://github.com/pypa/pip/issues/1773).
-			    // There are other tacks we might take
-			    sh 'python3 ./mypyenv/bin/pip3 install -r requirements.txt'
-			    sh 'python3 ./mypyenv/bin/pip3 install ../graphstore/rule-runner'
+			    sh 'pip3 install -r requirements.txt'
+			    sh 'pip3 install ../graphstore/rule-runner'
 			    // Ready, set...
 			    sh '$MAKECMD clean'
 
