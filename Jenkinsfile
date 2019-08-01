@@ -461,14 +461,14 @@ pipeline {
 
 		    // Make all software products available in bin/
 		    // (and lib/).
-		    sh 'mkdir -p bin/'
-		    sh 'mkdir -p lib/'
+		    sh 'mkdir -p /opt/pipeline/bin/'
+		    sh 'mkdir -p /opt/pipeline/lib/'
 		    sh 'mkdir -p sources/'
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
-			sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/bin/* ./bin/'
+			sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/bin/* /opt/pipeline/bin/'
 			// WARNING/BUG: needed for blazegraph-runner
 			// to run at this point.
-            		sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/lib/* ./lib/'
+            		sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/lib/* /opt/pipeline/lib/'
 			// Copy the sources we downloaded earlier to local.
 			sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/products/annotations/* ./sources/'
 
@@ -486,28 +486,21 @@ pipeline {
 			// Note the complex assignment of VIRTUAL_ENV and PATH.
 			// https://jenkins.io/doc/pipeline/steps/workflow-basic-steps/#code-withenv-code-set-environment-variables
       // "PATH+EXTRA=${WORKSPACE}/go-site/bin:${WORKSPACE}/go-site/pipeline/mypyenv/bin", 'PYTHONHOME=', "VIRTUAL_ENV=${WORKSPACE}/go-site/pipeline/mypyenv", 'PY_ENV=mypyenv', 'PY_BIN=mypyenv/bin'
-			withEnv(['JAVA_OPTS=-Xmx128G', 'OWLTOOLS_MEMORY=128G', 'BGMEM=128G', "PATH+EXTRA=${env.PWD}/bin:${env.PWD}/mypyenv/bin", 'PYTHONHOME=', "VIRTUAL_ENV=${env.PWD}/mypyenv", 'PY_ENV=mypyenv', 'PY_BIN=mypyenv/bin']){
+			withEnv(['JAVA_OPTS=-Xmx128G', 'OWLTOOLS_MEMORY=128G', 'BGMEM=128G', "PATH+EXTRA=/opt/pipeline/bin"]){
 			    // Note environment for future debugging.
-          sh 'pwd'
-          sh 'echo $PWD'
-          sh 'echo $WORKSPACE'
-          sh 'echo $PATH'
 			    sh 'env > env.txt'
 			    sh 'cat env.txt'
-          // Technically, a meaningless line as we will
-          // simulate this with entirely withEnv
-          // anyways.
-          // sh '$python3 -m venv mypyenv'
+
 			    // WARNING: Okay, this is our current
 			    // workaround for the shebang line limits
 			    // and long workspace names in Jenkins
 			    // declarative
 			    // (https://github.com/pypa/pip/issues/1773).
 			    // There are other tacks we might take
-			    // sh 'python3 ./mypyenv/bin/pip3 install -r requirements.txt'
-			    // sh 'python3 ./mypyenv/bin/pip3 install ../graphstore/rule-runner'
+			    sh 'python3 ./mypyenv/bin/pip3 install -r requirements.txt'
+			    sh 'python3 ./mypyenv/bin/pip3 install ../graphstore/rule-runner'
 			    // Ready, set...
-			    // sh '$MAKECMD clean'
+			    sh '$MAKECMD clean'
 
 			    // Do this thing, but the watchdog sits
 			    // waiting.
