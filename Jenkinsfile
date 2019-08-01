@@ -486,11 +486,12 @@ pipeline {
 			// Note the complex assignment of VIRTUAL_ENV and PATH.
 			// https://jenkins.io/doc/pipeline/steps/workflow-basic-steps/#code-withenv-code-set-environment-variables
       // "PATH+EXTRA=${WORKSPACE}/go-site/bin:${WORKSPACE}/go-site/pipeline/mypyenv/bin", 'PYTHONHOME=', "VIRTUAL_ENV=${WORKSPACE}/go-site/pipeline/mypyenv", 'PY_ENV=mypyenv', 'PY_BIN=mypyenv/bin'
-			withEnv(['JAVA_OPTS=-Xmx128G', 'OWLTOOLS_MEMORY=128G', 'BGMEM=128G', "PATH+EXTRA=/opt/pipeline/bin", 'FOO=BAR']){
+			withEnv(['JAVA_OPTS=-Xmx128G', 'OWLTOOLS_MEMORY=128G', 'BGMEM=128G', 'FOO=BAR']){
 			    // Note environment for future debugging.
           // Note: https://issues.jenkins-ci.org/browse/JENKINS-53025 and
           // https://issues.jenkins-ci.org/browse/JENKINS-49076
-          sh 'export PATH=/opt/pipeline/bin:$PATH'
+          // Just shell out PATH does not work either
+          // sh 'export PATH=/opt/pipeline/bin:$PATH'
 			    sh 'env > env.txt'
 			    sh 'cat env.txt'
 
@@ -526,7 +527,7 @@ pipeline {
 				    // everything handy: this is
 				    // SPARTA!
             // sh 'pwd'
-				    sh '$MAKECMD -e target/sparta-report.json'
+				    sh 'PATH=/opt/pipeline/bin:$PATH $MAKECMD -e target/sparta-report.json'
 				}
 			    }
 			}
