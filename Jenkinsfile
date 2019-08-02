@@ -495,7 +495,7 @@ pipeline {
 			    sh 'env > env.txt'
 			    sh 'cat env.txt'
 
-			    sh 'source environment.sh'
+			    sh '. ./environment.sh'
 			    // Ready, set...
 			    sh '$MAKECMD clean'
 
