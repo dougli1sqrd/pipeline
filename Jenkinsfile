@@ -35,11 +35,11 @@ pipeline {
 	// The people to call when things go bad. It is a comma-space
 	// "separated" string.
 	TARGET_ADMIN_EMAILS = 'sjcarbon@lbl.gov'
-	TARGET_SUCCESS_EMAILS = 'sjcarbon@lbl.gov,suzia@stanford.edu'
+	TARGET_SUCCESS_EMAILS = 'sjcarbon@lbl.gov'
 	// The file bucket(/folder) combination to use.
-	TARGET_BUCKET = 'go-data-product-experimental'
+	TARGET_BUCKET = 'null'
 	// The URL prefix to use when creating site indices.
-	TARGET_INDEXER_PREFIX = 'http://experimental.geneontology.io'
+	TARGET_INDEXER_PREFIX = 'null'
 	// This variable should typically be 'TRUE', which will cause
 	// some additional basic checks to be made. There are some
 	// very exotic cases where these check may need to be skipped
@@ -59,15 +59,15 @@ pipeline {
 
 	// The Zenodo concept ID to use for releases (and occasionally
 	// master testing).
-	ZENODO_REFERENCE_CONCEPT = '252781'
-	ZENODO_ARCHIVE_CONCEPT = '252779'
+	ZENODO_REFERENCE_CONCEPT = 'null'
+	ZENODO_ARCHIVE_CONCEPT = 'null'
 	// Distribution ID for the AWS CloudFront for this branch,
 	// used soley for invalidations. Versioned release does not
 	// need this as it is always a new location and the index
 	// upload already has an invalidation on it. For current,
 	// snapshot, and experimental.
-	AWS_CLOUDFRONT_DISTRIBUTION_ID = 'E2CDVG5YT5R4K4'
-	AWS_CLOUDFRONT_RELEASE_DISTRIBUTION_ID = 'E2HF1DWYYDLTQP'
+	AWS_CLOUDFRONT_DISTRIBUTION_ID = 'null'
+	AWS_CLOUDFRONT_RELEASE_DISTRIBUTION_ID = 'null'
 
 	///
 	/// Minerva input.
@@ -839,8 +839,8 @@ pipeline {
 		    sh 'mkdir -p /tmp/stats/ || true'
 		    sh 'python3 ./scripts/go_stats.py -g http://localhost:8080/solr/ -o /tmp/stats/'
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
-		    // Copy over stats files.
-		    sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" /tmp/stats/* skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/metadata/'
+			// Copy over stats files.
+			sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" /tmp/stats/* skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/metadata/'
 		    }
 		}
 	    }
