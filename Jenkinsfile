@@ -824,6 +824,25 @@ pipeline {
 		    // Copy over log.
 		    sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" /tmp/golr_timestamp.log skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/products/solr/'
 		}
+
+		// Solr should still be running in the background here
+		// from indexing--create stats products from running
+		// GOlr.
+		// Prepare a working directory based around go-site.
+		dir('./go-site') {
+		    git branch: TARGET_GO_SITE_BRANCH, url: 'https://github.com/geneontology/go-site.git'
+
+		    // Not much want or need here--simple
+		    // python3. However, using the information hidden
+		    // in run-indexer.sh to know where the Solr
+		    // instance is hiding.
+		    sh 'mkdir -p /tmp/stats/ || true'
+		    sh 'python3 ./scripts/go_stats.py -g http://localhost:8080/solr/ -o /tmp/stats/'
+		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
+		    // Copy over stats files.
+		    sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" /tmp/stats/* skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/metadata/'
+		    }
+		}
 	    }
 	}
 	//...
