@@ -526,6 +526,7 @@ pipeline {
 				    // everything handy: this is
 				    // SPARTA!
             // sh 'pwd'
+					sh 'pip freeze'
 				    sh 'PATH=/opt/pipeline/bin:$PATH $MAKECMD -e target/sparta-report.json'
 				}
 			    }
