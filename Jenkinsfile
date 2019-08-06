@@ -803,7 +803,7 @@ pipeline {
 	stage('Produce derivatives') {
 	    agent {
                 docker {
-		    image 'geneontology/golr-autoindex:b1007d0cfd356f707086a910342ba49b9511ba51_2019-01-09T143943'
+		    image 'geneontology/golr-autoindex:0d001c04c424478f51fc893ccde00d06017db262_2019-08-05T155203'
 		    // Reset Jenkins Docker agent default to original
 		    // root.
 		    args '-u root:root --mount type=tmpfs,destination=/srv/solr/data'
@@ -837,7 +837,11 @@ pipeline {
 		    // in run-indexer.sh to know where the Solr
 		    // instance is hiding.
 		    sh 'mkdir -p /tmp/stats/ || true'
-		    sh 'python3 ./scripts/go_stats.py -g http://localhost:8080/solr/ -o /tmp/stats/'
+		    sh 'cp ./scripts/go_stats.py /tmp'
+		    // Needed as extra library.
+		    sh 'pip3 install requests'
+		    //sh 'python3 ./scripts/go_stats.py -g http://localhost:8080/solr/ -o /tmp/stats/'
+		    sh 'bash /tmp/run-command.sh -c "python3 /tmp/go_stats.py -g http://localhost:8080/solr/ -o /tmp/stats/"'
 		    withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
 			// Copy over stats files.
 			sh 'rsync -avz -e "ssh -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY" /tmp/stats/* skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/metadata/'
