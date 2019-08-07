@@ -495,7 +495,8 @@ pipeline {
 			    sh 'env > env.txt'
 			    sh 'cat env.txt'
 
-			    sh '. ./environment.sh'
+			    sh 'pip3 install -r requirements.txt'
+          sh 'pip3 install ../graphstore/rule-runner'
 			    // Ready, set...
 			    sh '$MAKECMD clean'
 
