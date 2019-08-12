@@ -496,9 +496,9 @@ pipeline {
 					sh 'wget http://snapshot.geneontology.org/ontology/go.json -O target/go-ontology.json'
 
 					sh 'python3 --version'
-					sh 'python3 materialize.py --log target/groups/mgi/mgi-inferences.log infer --ontology target/go-ontology.json --target target/groups/mgi/mgi.inferred.gaf --gaf target/groups/mgi/mgi.gaf'
-					sh 'python3 materialize.py --log target/groups/pombase/pombase-inferences.log infer --ontology target/go-ontology.json --target target/groups/pombase/pombase.inferred.gaf --gaf target/groups/pombase/pombase.gaf'
-					sh 'python3 materialize.py --log target/groups/wb/wb-inferences.log infer --ontology target/go-ontology.json --target target/groups/wb/wb.inferred.gaf --gaf target/groups/wb/wb.gaf'
+					sh 'python3 env/bin/materialize.py --log target/groups/mgi/mgi-inferences.log infer --ontology target/go-ontology.json --target target/groups/mgi/mgi.inferred.gaf --gaf target/groups/mgi/mgi.gaf'
+					sh 'python3 env/bin/materialize.py --log target/groups/pombase/pombase-inferences.log infer --ontology target/go-ontology.json --target target/groups/pombase/pombase.inferred.gaf --gaf target/groups/pombase/pombase.gaf'
+					sh 'python3 env/bin/materialize.py --log target/groups/wb/wb-inferences.log infer --ontology target/go-ontology.json --target target/groups/wb/wb.inferred.gaf --gaf target/groups/wb/wb.gaf'
 
 					withCredentials([file(credentialsId: 'skyhook-private-key', variable: 'SKYHOOK_IDENTITY')]) {
 						sh 'scp -o StrictHostKeyChecking=no -o IdentitiesOnly=true -o IdentityFile=$SKYHOOK_IDENTITY target/groups/mgi/mgi* target/groups/pombase/pombase* target/groups/wb/wb* skyhook@skyhook.berkeleybop.org:/home/skyhook/$BRANCH_NAME/products/annotations'
