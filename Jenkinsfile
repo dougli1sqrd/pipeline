@@ -439,7 +439,7 @@ pipeline {
 			// the environment changes for python venv activate.
 			// Note the complex assignment of VIRTUAL_ENV and PATH.
 			// https://jenkins.io/doc/pipeline/steps/workflow-basic-steps/#code-withenv-code-set-environment-variables
-			withEnv(['JAVA_OPTS=-Xmx128G', 'OWLTOOLS_MEMORY=128G', 'BGMEM=128G', "PATH+EXTRA=${WORKSPACE}/go-site/bin:${WORKSPACE}/go-site/pipeline/mypyenv/bin", 'PYTHONHOME=', "VIRTUAL_ENV=${WORKSPACE}/go-site/pipeline/mypyenv", 'PY_ENV=mypyenv', 'PY_BIN=mypyenv/bin']){
+			withEnv(['JAVA_OPTS=-Xmx128G', 'OWLTOOLS_MEMORY=128G', 'BGMEM=128G']){
 			    // Note environment for future debugging.
 			    sh 'env > env.txt'
 			    sh 'cat env.txt'
@@ -452,6 +452,8 @@ pipeline {
 
 			    // Installs the specialty ontobio script for materializing inferences see
 			    // https://github.com/biolink/ontobio/issues/341
+			    sh 'python3 -m venv env'
+			    sh 'source env/bin/activate'
 			    sh 'pip3 install -e git+https://github.com/biolink/ontobio.git@issue-341-enables_script#egg=ontobio'
 			    // sh 'python3 ./mypyenv/bin/pip3 install ../graphstore/rule-runner'
 			    // Ready, set...
